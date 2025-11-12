@@ -53,7 +53,7 @@ jobs:
   deploy-api:
     name: Deploy API to App Runner
     needs: build-and-test
-    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    if: github.ref == 'refs/heads/main' && (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
     runs-on: ubuntu-latest
     outputs:
       api_url: ${{ steps.get-url.outputs.api_url }}
@@ -208,7 +208,7 @@ jobs:
   deploy-client:
     name: Deploy Client to S3
     needs: [build-and-test, deploy-api]
-    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    if: github.ref == 'refs/heads/main' && (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
     runs-on: ubuntu-latest
     
     steps:
