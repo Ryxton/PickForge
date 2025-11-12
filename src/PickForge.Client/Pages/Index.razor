@@ -1,0 +1,79 @@
+﻿@page "/"
+@using PickForge.Client.Models
+@inject HttpClient Http
+
+<h3>Upcoming Week Predictions</h3>
+
+<div style="margin-bottom:12px;">
+    <label>Factor in last&nbsp;</label>
+    <input type="number" min="1" max="10" style="width:4rem" @bind="Recent" />
+    <label>&nbsp;weeks</label>
+    <button disabled="@IsLoading" style="margin-left:8px;" @onclick="Run">Predict</button>
+</div>
+
+<p style="color:#666;">@Status</p>
+
+@if (IsLoading)
+{
+    <p>Loading…</p>
+}
+else if (Result is not null)
+{
+    <p><strong>Week @Result.Week</strong>; using last @Result.RecentGames week(s).
+        Stats through Week @Result.LastCompletedWeek. (@Result.Count games)
+    </p>
+
+    @foreach (var g in Result.Games.OrderBy(g => g.Kickoff))
+    {
+        <div style="border:1px solid #ddd;border-radius:8px;padding:10px;margin-bottom:8px;">
+            <div>
+                <strong>@($"{g.AwayTeam} @ {g.HomeTeam}")</strong>
+                <span style="color:#666;">(@g.Kickoff.ToLocalTime().ToString("g"))</span>
+            </div>
+
+            <div>
+                Pick: <strong>@g.Pick</strong> @($"({Math.Round(g.Confidence * 100)}%)")
+            </div>
+
+            <div style="color:#666;">
+                Home W-L: @(g.Home?.Wins ?? 0)-@(g.Home?.Losses ?? 0),
+                PPG: @((g.Home?.PPG ?? 0).ToString("F1")),
+                PAPG: @((g.Home?.PAPG ?? 0).ToString("F1")) |
+                Away W-L: @(g.Away?.Wins ?? 0)-@(g.Away?.Losses ?? 0),
+                PPG: @((g.Away?.PPG ?? 0).ToString("F1")),
+                PAPG: @((g.Away?.PAPG ?? 0).ToString("F1"))
+            </div>
+
+            <div style="color:#888;font-size:.9rem">@g.Notes</div>
+        </div>
+    }
+}
+
+@code {
+    int Recent = 3;
+    bool IsLoading;
+    string Status = "Ready.";
+    PredictResponse? Result;
+
+    async Task Run()
+    {
+        IsLoading = true; Result = null; Status = "Contacting API…";
+        StateHasChanged();
+
+        try
+        {
+            var url = $"/predict?recent={Math.Clamp(Recent, 1, 10)}";
+            var data = await Http.GetFromJsonAsync<PredictResponse>(url);
+            if (data is null) { Status = "API returned no data."; }
+            else { Result = data; Status = "Done."; }
+        }
+        catch (Exception ex)
+        {
+            Status = $"Error: {ex.Message}";
+        }
+        finally
+        {
+            IsLoading = false;
+        }
+    }
+}

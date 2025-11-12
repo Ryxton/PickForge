@@ -1,0 +1,31 @@
+﻿
+Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio Version 17
+VisualStudioVersion = 17.14.36518.9
+MinimumVisualStudioVersion = 10.0.40219.1
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "PickForge.Api", "src\PickForge.Api\PickForge.Api.csproj", "{AFD1A778-58E9-6EC9-314E-264446CDCD8C}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "PickForge.Client", "src\PickForge.Client\PickForge.Client.csproj", "{848C53F2-3912-1DE6-5054-1CF640CA977E}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Any CPU = Debug|Any CPU
+		Release|Any CPU = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{AFD1A778-58E9-6EC9-314E-264446CDCD8C}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{AFD1A778-58E9-6EC9-314E-264446CDCD8C}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{AFD1A778-58E9-6EC9-314E-264446CDCD8C}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{AFD1A778-58E9-6EC9-314E-264446CDCD8C}.Release|Any CPU.Build.0 = Release|Any CPU
+		{848C53F2-3912-1DE6-5054-1CF640CA977E}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{848C53F2-3912-1DE6-5054-1CF640CA977E}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{848C53F2-3912-1DE6-5054-1CF640CA977E}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{848C53F2-3912-1DE6-5054-1CF640CA977E}.Release|Any CPU.Build.0 = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = FALSE
+	EndGlobalSection
+	GlobalSection(ExtensibilityGlobals) = postSolution
+		SolutionGuid = {2B8E1DE0-D00B-4EB2-BC11-B5A3C9583C31}
+	EndGlobalSection
+EndGlobal
