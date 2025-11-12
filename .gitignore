@@ -1,26 +1,90 @@
-# Visual Studio / .NET
+# =========================
+#  Visual Studio / .NET
+# =========================
 .vs/
-bin/
-obj/
+.idea/
 *.user
 *.suo
 *.userosscache
 *.sln.docstates
+*.log
 
 # Build results
-[Dd]ebug/
-[Rr]elease/
+[Bb]in/
+[Oo]bj/
+[Bb]uild/
+[Bb]ld/
+[Dd]ebug*/
+[Rr]elease*/
 x64/
 x86/
 [Aa][Rr][Mm]/
 [Aa][Rr][Mm]64/
-bld/
 
-# Others
-*.log
+# Publish output
+publish/
+out/
+dist/
+artifacts/
+
+# =========================
+#  Blazor / WebAssembly
+# =========================
+# Local cache and compiled assets
+wwwroot/dist/
+wwwroot/build/
+wwwroot/node_modules/
+node_modules/
+*.gz
+*.br
+
+# Auto-generated framework files
+wwwroot/_framework/
+wwwroot/_content/
+**/bin/Release/net*/publish/wwwroot/
+**/obj/Release/net*/staticwebassets/
+
+# =========================
+#  User / Environment
+# =========================
+*.env
+*.local
+*.secret
+*.cache
+*.temp
 *.tmp
 *.bak
-*.cache
-*.config
-*.ide
+
+# =========================
+#  Tooling / IDE junk
+# =========================
 *.dbmdl
+*.pdb
+*.vscode/
+.vscode/*
+.vscode/settings.json
+.vscode/launch.json
+.vscode/tasks.json
+
+# Rider / JetBrains
+.idea/
+*.sln.iml
+
+# =========================
+#  OS / Misc
+# =========================
+.DS_Store
+Thumbs.db
+ehthumbs.db
+desktop.ini
+
+# =========================
+#  ASP.NET / Logs / Others
+# =========================
+App_Data/
+logs/
+*.log
+*.tlog
+*.coverage
+*.coveragexml
+TestResult*/
