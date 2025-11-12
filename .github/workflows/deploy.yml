@@ -98,6 +98,8 @@ jobs:
             sed -i 's|CLOUDFRONT_URL_PLACEHOLDER|'"$CF_URL"'|g' \
               src/PickForge.Api/appsettings.Production.json
             echo "✅ Updated CORS with CloudFront URL: $CF_URL"
+            echo "📄 Verifying appsettings.Production.json contents:"
+            cat src/PickForge.Api/appsettings.Production.json
           else
             echo "⚠️  No CloudFront URL available; CORS placeholder remains"
           fi
