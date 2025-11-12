@@ -1,0 +1,298 @@
+name: Deploy to AWS
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:  # Allow manual trigger
+
+env:
+  AWS_REGION: us-east-2
+  DOTNET_VERSION: '8.0.x'
+
+jobs:
+  build-and-test:
+    name: Build and Test
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Cache NuGet packages
+        uses: actions/cache@v4
+        with:
+          path: ~/.nuget/packages
+          key: ${{ runner.os }}-nuget-${{ hashFiles('**/*.csproj') }}
+          restore-keys: |
+            ${{ runner.os }}-nuget-
+      
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: ${{ env.DOTNET_VERSION }}
+      
+      - name: Restore dependencies
+        run: dotnet restore
+      
+      - name: Build solution
+        run: dotnet build --no-restore -c Release
+      
+      - name: Run tests
+        run: dotnet test --no-build -c Release --logger trx --results-directory ./test-results
+        continue-on-error: true
+      
+      - name: Upload test results
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: test-results
+          path: ./test-results
+
+  deploy-api:
+    name: Deploy API to App Runner
+    needs: build-and-test
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    runs-on: ubuntu-latest
+    outputs:
+      api_url: ${{ steps.get-url.outputs.api_url }}
+      cloudfront_url: ${{ steps.get-cf-url.outputs.url }}
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+      
+      - name: Login to Amazon ECR
+        id: login-ecr
+        uses: aws-actions/amazon-ecr-login@v2
+      
+      - name: Derive CloudFront URL from distribution ID
+        id: get-cf-url
+        run: |
+          if [ -n "${{ secrets.CLOUDFRONT_DISTRIBUTION_ID }}" ]; then
+            DOMAIN=$(aws cloudfront get-distribution \
+              --id ${{ secrets.CLOUDFRONT_DISTRIBUTION_ID }} \
+              --query 'Distribution.DomainName' --output text)
+            echo "url=https://$DOMAIN" >> $GITHUB_OUTPUT
+            echo "✅ CloudFront URL: https://$DOMAIN"
+          elif [ -n "${{ secrets.CLOUDFRONT_URL }}" ]; then
+            echo "url=${{ secrets.CLOUDFRONT_URL }}" >> $GITHUB_OUTPUT
+            echo "✅ Using CloudFront URL from secret"
+          else
+            echo "⚠️  No CloudFront URL available"
+          fi
+      
+      - name: Replace CORS placeholder with CloudFront URL
+        run: |
+          CF_URL="${{ steps.get-cf-url.outputs.url }}"
+          
+          if [ -n "$CF_URL" ]; then
+            sed -i 's|CLOUDFRONT_URL_PLACEHOLDER|'"$CF_URL"'|g' \
+              src/PickForge.Api/appsettings.Production.json
+            echo "✅ Updated CORS with CloudFront URL: $CF_URL"
+          else
+            echo "⚠️  No CloudFront URL available; CORS placeholder remains"
+          fi
+      
+      - name: Build, tag, and push Docker image to ECR
+        id: build-image
+        env:
+          ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+          ECR_REPOSITORY: pickforge-api
+          IMAGE_TAG: ${{ github.sha }}
+        run: |
+          # Build Docker image
+          docker build \
+            -t $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG \
+            -t $ECR_REGISTRY/$ECR_REPOSITORY:latest \
+            -f src/PickForge.Api/Dockerfile \
+            .
+          
+          # Push both tags
+          docker push $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG
+          docker push $ECR_REGISTRY/$ECR_REPOSITORY:latest
+          
+          echo "image=$ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG" >> $GITHUB_OUTPUT
+      
+      - name: Deploy to App Runner
+        run: |
+          if [ -n "${{ secrets.APP_RUNNER_SERVICE_ARN }}" ]; then
+            aws apprunner start-deployment \
+              --service-arn ${{ secrets.APP_RUNNER_SERVICE_ARN }} \
+              --region ${{ env.AWS_REGION }}
+            echo "✅ App Runner deployment triggered"
+          else
+            echo "⚠️  APP_RUNNER_SERVICE_ARN not set, skipping deployment"
+          fi
+      
+      - name: Wait for deployment
+        run: |
+          if [ -n "${{ secrets.APP_RUNNER_SERVICE_ARN }}" ]; then
+            echo "⏳ Waiting for App Runner deployment to complete..."
+            aws apprunner wait service-running \
+              --service-arn ${{ secrets.APP_RUNNER_SERVICE_ARN }} \
+              --region ${{ env.AWS_REGION }} \
+              --cli-read-timeout 600
+            echo "✅ App Runner deployment complete"
+          else
+            echo "⚠️  APP_RUNNER_SERVICE_ARN not set, skipping wait"
+          fi
+      
+      - name: Get App Runner URL
+        id: get-url
+        run: |
+          if [ -n "${{ secrets.APP_RUNNER_SERVICE_ARN }}" ]; then
+            URL=$(aws apprunner describe-service \
+              --service-arn ${{ secrets.APP_RUNNER_SERVICE_ARN }} \
+              --region ${{ env.AWS_REGION }} \
+              --query 'Service.ServiceUrl' \
+              --output text)
+            echo "api_url=https://$URL" >> $GITHUB_OUTPUT
+            echo "✅ API URL: https://$URL"
+          else
+            echo "⚠️  APP_RUNNER_SERVICE_ARN not set, skipping URL retrieval"
+          fi
+      
+      - name: Summary
+        run: |
+          echo "## 🚀 API Deployment Complete" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "- **Image:** ${{ steps.build-image.outputs.image }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Region:** ${{ env.AWS_REGION }}" >> $GITHUB_STEP_SUMMARY
+          if [ -n "${{ steps.get-url.outputs.api_url }}" ]; then
+            echo "- **API URL:** ${{ steps.get-url.outputs.api_url }}" >> $GITHUB_STEP_SUMMARY
+          fi
+          if [ -n "${{ steps.get-cf-url.outputs.url }}" ]; then
+            echo "- **CloudFront URL:** ${{ steps.get-cf-url.outputs.url }}" >> $GITHUB_STEP_SUMMARY
+          fi
+
+  deploy-client:
+    name: Deploy Client to S3
+    needs: [build-and-test, deploy-api]
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Cache NuGet packages
+        uses: actions/cache@v4
+        with:
+          path: ~/.nuget/packages
+          key: ${{ runner.os }}-nuget-${{ hashFiles('**/*.csproj') }}
+          restore-keys: |
+            ${{ runner.os }}-nuget-
+      
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: ${{ env.DOTNET_VERSION }}
+      
+      - name: Publish Blazor WASM
+        run: |
+          cd src/PickForge.Client
+          dotnet publish -c Release -o ../../publish/client
+          cd ../..
+      
+      - name: Resolve API URL (prefer output from API job)
+        id: resolve-api
+        run: |
+          if [ -n "${{ needs.deploy-api.outputs.api_url }}" ]; then
+            echo "resolved_api=${{ needs.deploy-api.outputs.api_url }}" >> $GITHUB_OUTPUT
+            echo "✅ Using API URL from deploy-api job output"
+          elif [ -n "${{ secrets.API_URL }}" ]; then
+            echo "resolved_api=${{ secrets.API_URL }}" >> $GITHUB_OUTPUT
+            echo "✅ Using API URL from secret (fallback)"
+          else
+            echo "⚠️  No API URL provided; leaving placeholder (not recommended)"
+          fi
+      
+      - name: Replace API URL placeholder
+        if: steps.resolve-api.outputs.resolved_api != ''
+        run: |
+          sed -i 's|API_URL_PLACEHOLDER|${{ steps.resolve-api.outputs.resolved_api }}|g' \
+            publish/client/wwwroot/appsettings.Production.json
+          
+          # Copy Production config over default for deployment
+          cp publish/client/wwwroot/appsettings.Production.json \
+             publish/client/wwwroot/appsettings.json
+          
+          echo "✅ Updated client with API URL: ${{ steps.resolve-api.outputs.resolved_api }}"
+      
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+      
+      - name: Deploy to S3
+        run: |
+          if [ -n "${{ secrets.S3_BUCKET }}" ]; then
+            # Upload all files except index.html and appsettings.json with long cache
+            aws s3 sync publish/client/wwwroot/ s3://${{ secrets.S3_BUCKET }}/ \
+              --delete \
+              --cache-control "public, max-age=31536000, immutable" \
+              --exclude "index.html" \
+              --exclude "appsettings.json" \
+              --exclude "appsettings.*.json"
+            
+            # Upload index.html with no-cache
+            aws s3 cp publish/client/wwwroot/index.html s3://${{ secrets.S3_BUCKET }}/ \
+              --cache-control "no-cache, no-store, must-revalidate"
+            
+            # Upload appsettings.json with no-cache
+            aws s3 cp publish/client/wwwroot/appsettings.json s3://${{ secrets.S3_BUCKET }}/ \
+              --cache-control "no-cache, no-store, must-revalidate"
+            
+            echo "✅ Client deployed to S3"
+          else
+            echo "⚠️  S3_BUCKET not set, skipping S3 deployment"
+          fi
+      
+      - name: Invalidate CloudFront cache
+        run: |
+          if [ -n "${{ secrets.CLOUDFRONT_DISTRIBUTION_ID }}" ]; then
+            aws cloudfront create-invalidation \
+              --distribution-id ${{ secrets.CLOUDFRONT_DISTRIBUTION_ID }} \
+              --paths "/*"
+            echo "✅ CloudFront cache invalidated"
+          else
+            echo "⚠️  CLOUDFRONT_DISTRIBUTION_ID not set, skipping cache invalidation"
+          fi
+      
+      - name: Get S3 website URL
+        id: get-s3-url
+        run: |
+          if [ -n "${{ secrets.S3_BUCKET }}" ]; then
+            URL="http://${{ secrets.S3_BUCKET }}.s3-website.${{ env.AWS_REGION }}.amazonaws.com"
+            echo "s3_url=$URL" >> $GITHUB_OUTPUT
+            echo "✅ S3 Website URL: $URL"
+          else
+            echo "⚠️  S3_BUCKET not set, skipping URL generation"
+          fi
+      
+      - name: Summary
+        run: |
+          echo "## 🌐 Client Deployment Complete" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "- **S3 Bucket:** ${{ secrets.S3_BUCKET }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Region:** ${{ env.AWS_REGION }}" >> $GITHUB_STEP_SUMMARY
+          if [ -n "${{ steps.get-s3-url.outputs.s3_url }}" ]; then
+            echo "- **S3 URL:** ${{ steps.get-s3-url.outputs.s3_url }}" >> $GITHUB_STEP_SUMMARY
+          fi
+          if [ -n "${{ needs.deploy-api.outputs.cloudfront_url }}" ]; then
+            echo "- **CloudFront URL:** ${{ needs.deploy-api.outputs.cloudfront_url }}" >> $GITHUB_STEP_SUMMARY
+          fi
+          if [ -n "${{ steps.resolve-api.outputs.resolved_api }}" ]; then
+            echo "- **API URL:** ${{ steps.resolve-api.outputs.resolved_api }}" >> $GITHUB_STEP_SUMMARY
+          fi

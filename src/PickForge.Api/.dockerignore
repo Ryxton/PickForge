@@ -1,0 +1,38 @@
+# Exclude build artifacts
+**/bin/
+**/obj/
+**/out/
+
+# Exclude IDE files
+**/.vs/
+**/.vscode/
+**/.idea/
+*.user
+*.suo
+
+# Exclude Git
+.git/
+.gitignore
+.gitattributes
+
+# Exclude documentation
+*.md
+docs/
+
+# Exclude test files
+**/*Tests/
+**/*.Tests/
+
+# Exclude local config
+**/appsettings.Development.json
+**/launchSettings.json
+
+# Exclude Docker files (avoid recursion)
+**/Dockerfile
+**/.dockerignore
+**/docker-compose*.yml
+
+# Exclude misc
+**/.DS_Store
+**/Thumbs.db
+**/*.log

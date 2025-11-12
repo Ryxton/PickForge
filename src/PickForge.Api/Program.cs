@@ -6,17 +6,17 @@ var builder = WebApplication.CreateBuilder(args);
 
 // --- CORS ---
 const string CorsPolicy = "PickForgeCors";
+
+// Read CORS origins from configuration (environment-specific)
+var corsOrigins = builder.Configuration.GetSection("CorsOrigins").Get<string[]>()
+    ?? new[] { "https://localhost:7256" }; // Fallback to localhost if not configured
+
 builder.Services.AddCors(options =>
 {
     options.AddPolicy(CorsPolicy, policy =>
     {
         policy
-            .WithOrigins(
-                "https://localhost:7256" // Blazor WASM client origin (from your screenshot)
-                                         // Add more dev origins here if you run the client on other ports:
-                                         // "https://localhost:7170",
-                                         // "http://localhost:5173"
-            )
+            .WithOrigins(corsOrigins)
             .AllowAnyHeader()
             .AllowAnyMethod();
         // If you later use cookies/auth:

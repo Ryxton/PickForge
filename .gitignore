@@ -87,4 +87,9 @@ logs/
 *.tlog
 *.coverage
 *.coveragexml
+
+# =========================
+#  Documentation (local only)
+# =========================
+docs/
 TestResult*/
