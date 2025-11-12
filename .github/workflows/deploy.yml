@@ -137,11 +137,42 @@ jobs:
         run: |
           if [ -n "${{ secrets.APP_RUNNER_SERVICE_ARN }}" ]; then
             echo "⏳ Waiting for App Runner deployment to complete..."
-            aws apprunner wait service-running \
-              --service-arn ${{ secrets.APP_RUNNER_SERVICE_ARN }} \
-              --region ${{ env.AWS_REGION }} \
-              --cli-read-timeout 600
-            echo "✅ App Runner deployment complete"
+            
+            # Poll for deployment status (AWS CLI doesn't support 'apprunner wait')
+            MAX_ATTEMPTS=60
+            ATTEMPT=0
+            
+            while [ $ATTEMPT -lt $MAX_ATTEMPTS ]; do
+              STATUS=$(aws apprunner describe-service \
+                --service-arn ${{ secrets.APP_RUNNER_SERVICE_ARN }} \
+                --region ${{ env.AWS_REGION }} \
+                --query 'Service.Status' \
+                --output text)
+              
+              echo "Attempt $((ATTEMPT+1))/$MAX_ATTEMPTS: Status = $STATUS"
+              
+              if [ "$STATUS" = "RUNNING" ]; then
+                echo "✅ App Runner deployment complete"
+                break
+              elif [ "$STATUS" = "OPERATION_IN_PROGRESS" ] || [ "$STATUS" = "CREATE_FAILED" ] || [ "$STATUS" = "DELETE_FAILED" ]; then
+                if [ "$STATUS" = "CREATE_FAILED" ] || [ "$STATUS" = "DELETE_FAILED" ]; then
+                  echo "❌ Deployment failed with status: $STATUS"
+                  exit 1
+                fi
+                # Still deploying, wait and retry
+                sleep 10
+                ATTEMPT=$((ATTEMPT+1))
+              else
+                echo "⚠️  Unexpected status: $STATUS"
+                sleep 10
+                ATTEMPT=$((ATTEMPT+1))
+              fi
+            done
+            
+            if [ $ATTEMPT -eq $MAX_ATTEMPTS ]; then
+              echo "❌ Deployment timed out after $((MAX_ATTEMPTS*10)) seconds"
+              exit 1
+            fi
           else
             echo "⚠️  APP_RUNNER_SERVICE_ARN not set, skipping wait"
           fi
