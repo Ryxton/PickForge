@@ -1,0 +1,93 @@
+@page "/login"
+@using PickForge.Client.Services
+@inject AuthService AuthService
+@inject NavigationManager Navigation
+
+<div style="max-width: 400px; margin: 100px auto; padding: 20px; border: 1px solid #ddd; border-radius: 8px;">
+    <h3 style="text-align: center; margin-bottom: 20px;">🏈 PickForge</h3>
+    
+    @if (!string.IsNullOrEmpty(errorMessage))
+    {
+        <div style="background-color: #f8d7da; color: #721c24; padding: 10px; border-radius: 4px; margin-bottom: 15px;">
+            @errorMessage
+        </div>
+    }
+    
+    <div style="margin-bottom: 15px;">
+        <label style="display: block; margin-bottom: 5px; font-weight: bold;">Password</label>
+        <input
+            type="password"
+            @bind="password"
+            @bind:event="oninput"
+            @onkeypress="HandleKeyPress"
+            placeholder="Enter password"
+            style="width: 100%; padding: 8px; border: 1px solid #ccc; border-radius: 4px;"
+            disabled="@isLoading" />
+    </div>
+    
+    <button 
+        @onclick="HandleLogin" 
+        disabled="@isLoading"
+        style="width: 100%; padding: 10px; background-color: #007bff; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 16px;">
+        @(isLoading ? "Logging in..." : "Login")
+    </button>
+</div>
+
+@code {
+    private string password = "";
+    private string errorMessage = "";
+    private bool isLoading = false;
+
+    protected override async Task OnInitializedAsync()
+    {
+        // If already authenticated, redirect to home
+        if (await AuthService.IsAuthenticatedAsync())
+        {
+            Navigation.NavigateTo("/");
+        }
+    }
+
+    private async Task HandleLogin()
+    {
+        if (string.IsNullOrWhiteSpace(password))
+        {
+            errorMessage = "Please enter a password.";
+            return;
+        }
+
+        isLoading = true;
+        errorMessage = "";
+        StateHasChanged();
+
+        try
+        {
+            var success = await AuthService.LoginAsync(password);
+            
+            if (success)
+            {
+                Navigation.NavigateTo("/");
+            }
+            else
+            {
+                errorMessage = "Incorrect password. Please try again.";
+                password = "";
+            }
+        }
+        catch (Exception ex)
+        {
+            errorMessage = $"Login error: {ex.Message}";
+        }
+        finally
+        {
+            isLoading = false;
+        }
+    }
+
+    private async Task HandleKeyPress(KeyboardEventArgs e)
+    {
+        if (e.Key == "Enter" && !isLoading)
+        {
+            await HandleLogin();
+        }
+    }
+}

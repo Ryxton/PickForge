@@ -1,8 +1,16 @@
 ﻿@page "/"
 @using PickForge.Client.Models
+@using PickForge.Client.Services
 @inject HttpClient Http
+@inject AuthService AuthService
+@inject NavigationManager Navigation
 
-<h3>Upcoming Week Predictions</h3>
+<div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+    <h3 style="margin: 0;">Upcoming Week Predictions</h3>
+    <button @onclick="HandleLogout" style="padding: 6px 12px; background-color: #dc3545; color: white; border: none; border-radius: 4px; cursor: pointer;">
+        Logout
+    </button>
+</div>
 
 <div style="margin-bottom:12px;">
     <label>Factor in last&nbsp;</label>
@@ -54,6 +62,22 @@ else if (Result is not null)
     bool IsLoading;
     string Status = "Ready.";
     PredictResponse? Result;
+
+    protected override async Task OnInitializedAsync()
+    {
+        // Check if user is authenticated
+        if (!await AuthService.IsAuthenticatedAsync())
+        {
+            Navigation.NavigateTo("/login");
+            return;
+        }
+    }
+
+    async Task HandleLogout()
+    {
+        await AuthService.LogoutAsync();
+        Navigation.NavigateTo("/login");
+    }
 
     async Task Run()
     {

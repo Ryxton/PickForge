@@ -255,11 +255,24 @@ jobs:
           sed -i 's|API_URL_PLACEHOLDER|${{ steps.resolve-api.outputs.resolved_api }}|g' \
             publish/client/wwwroot/appsettings.Production.json
           
+          echo "✅ Updated client with API URL: ${{ steps.resolve-api.outputs.resolved_api }}"
+      
+      - name: Replace App Password placeholder
+        run: |
+          if [ -n "${{ secrets.APP_PASSWORD }}" ]; then
+            sed -i 's|APP_PASSWORD_PLACEHOLDER|${{ secrets.APP_PASSWORD }}|g' \
+              publish/client/wwwroot/appsettings.Production.json
+            echo "✅ Updated client with App Password"
+          else
+            echo "⚠️  APP_PASSWORD secret not set, leaving placeholder"
+          fi
+          
           # Copy Production config over default for deployment
           cp publish/client/wwwroot/appsettings.Production.json \
              publish/client/wwwroot/appsettings.json
           
-          echo "✅ Updated client with API URL: ${{ steps.resolve-api.outputs.resolved_api }}"
+          echo "📄 Verifying appsettings.Production.json contents:"
+          cat publish/client/wwwroot/appsettings.Production.json
       
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v4
