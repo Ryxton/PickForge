@@ -13,7 +13,8 @@ var apiBase = builder.Configuration["ApiBaseUrl"] ?? "https://localhost:7004/";
 
 builder.Services.AddScoped(sp => new HttpClient { BaseAddress = new Uri(apiBase) });
 
-// Register AuthService
+// Register services
 builder.Services.AddScoped<AuthService>();
+builder.Services.AddScoped<ScoreboardService>();
 
 await builder.Build().RunAsync();

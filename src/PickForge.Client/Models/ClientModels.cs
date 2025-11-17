@@ -1,5 +1,36 @@
 ﻿namespace PickForge.Client.Models;
 
+public class SeasonContextResponse
+{
+    public int CurrentYear { get; set; }
+    public int CurrentWeek { get; set; }
+    public int SeasonType { get; set; }
+    public int ActivePicksWeek { get; set; }
+    public int MaxWeek { get; set; }
+}
+
+public class ScoreboardWeekResponse
+{
+    public int WeekNumber { get; set; }
+    public int SeasonYear { get; set; }
+    public int SeasonType { get; set; }
+    public bool IsActivePicksWeek { get; set; }
+    public List<GameViewModel> Games { get; set; } = new();
+}
+
+public class GameViewModel
+{
+    public string GameId { get; set; } = "";
+    public string HomeTeam { get; set; } = "";
+    public string AwayTeam { get; set; } = "";
+    public DateTime Kickoff { get; set; }
+    public int? HomeScore { get; set; }
+    public int? AwayScore { get; set; }
+    public string Status { get; set; } = "pre";
+    public bool IsFinal { get; set; }
+    public bool IsInProgress { get; set; }
+}
+
 public class PredictResponse
 {
     public int Week { get; set; }

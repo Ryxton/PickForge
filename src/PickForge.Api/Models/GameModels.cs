@@ -1,5 +1,13 @@
 ﻿namespace PickForge.Api.Models;
 
+public record SeasonContext(
+    int CurrentYear,
+    int CurrentWeek,
+    int SeasonType,
+    int ActivePicksWeek,
+    int MaxWeek
+);
+
 public record GameFeatures(
     string GameId,
     string HomeTeam,
@@ -7,7 +15,12 @@ public record GameFeatures(
     DateTime Kickoff,
     double? HomeMoneyline,
     double? AwayMoneyline,
-    double? HomeSpread
+    double? HomeSpread,
+    int? HomeScore,
+    int? AwayScore,
+    string Status,
+    bool IsFinal,
+    bool IsInProgress
 );
 
 public record GamePrediction(
@@ -24,5 +37,7 @@ public record ScoreboardResult(
     ScoreboardResponse Scoreboard,
     List<GameFeatures> Games,
     int WeekNumber,
-    bool IsUpcomingWeek
+    bool IsUpcomingWeek,
+    int SeasonYear,
+    int SeasonType
 );

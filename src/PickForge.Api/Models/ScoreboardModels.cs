@@ -24,6 +24,18 @@ public class Event
 public class Competition
 {
     [JsonPropertyName("competitors")] public List<Competitor>? Competitors { get; set; }
+    [JsonPropertyName("status")] public CompetitionStatus? Status { get; set; }
+}
+
+public class CompetitionStatus
+{
+    [JsonPropertyName("type")] public StatusType? Type { get; set; }
+}
+
+public class StatusType
+{
+    [JsonPropertyName("state")] public string? State { get; set; }
+    [JsonPropertyName("completed")] public bool Completed { get; set; }
 }
 
 public class Competitor

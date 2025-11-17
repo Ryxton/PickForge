@@ -53,6 +53,64 @@ app.UseRateLimiter();
 
 app.MapGet("/ping", () => Results.Ok(new { ok = true }));
 
+// Season context endpoint
+app.MapGet("/api/scoreboard/context", async (ScoreboardService scoreboards) =>
+{
+    var context = await scoreboards.GetSeasonContextAsync();
+    return Results.Ok(context);
+}).RequireRateLimiting("fixed");
+
+// Current active picks week endpoint
+app.MapGet("/api/scoreboard/current", async (ScoreboardService scoreboards) =>
+{
+    var result = await scoreboards.GetUpcomingGamesAsync();
+    return Results.Ok(new
+    {
+        result.WeekNumber,
+        result.SeasonYear,
+        result.SeasonType,
+        IsActivePicksWeek = true,
+        Games = result.Games.Select(g => new
+        {
+            g.GameId,
+            g.HomeTeam,
+            g.AwayTeam,
+            g.Kickoff,
+            g.HomeScore,
+            g.AwayScore,
+            g.Status,
+            g.IsFinal,
+            g.IsInProgress
+        })
+    });
+}).RequireRateLimiting("fixed");
+
+// Specific week endpoint
+app.MapGet("/api/scoreboard/week/{week:int}", async (
+    int week,
+    ScoreboardService scoreboards) =>
+{
+    var result = await scoreboards.GetWeekAsync(week);
+    return Results.Ok(new
+    {
+        result.WeekNumber,
+        result.SeasonYear,
+        result.SeasonType,
+        Games = result.Games.Select(g => new
+        {
+            g.GameId,
+            g.HomeTeam,
+            g.AwayTeam,
+            g.Kickoff,
+            g.HomeScore,
+            g.AwayScore,
+            g.Status,
+            g.IsFinal,
+            g.IsInProgress
+        })
+    });
+}).RequireRateLimiting("fixed");
+
 // Main endpoint: predict upcoming week using last N recent games
 app.MapGet("/predict", async (
     int? recent,

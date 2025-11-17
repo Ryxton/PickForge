@@ -3,6 +3,7 @@
 @using PickForge.Client.Services
 @inject HttpClient Http
 @inject AuthService AuthService
+@inject ScoreboardService ScoreboardService
 @inject NavigationManager Navigation
 
 <div class="app-header">
@@ -10,12 +11,25 @@
     <button class="btn-logout" @onclick="HandleLogout">LOGOUT</button>
 </div>
 
-<div class="control-panel">
-    <label>Factor in last</label>
-    <input type="number" min="1" max="10" @bind="Recent" />
-    <label>weeks</label>
-    <button class="btn-primary" disabled="@IsLoading" @onclick="Run">PREDICT</button>
+<div class="week-navigation">
+    <button class="btn-nav" @onclick="PreviousWeek" disabled="@(SelectedWeek <= 1 || IsLoading)">← PREV</button>
+    <span class="week-display">WEEK @SelectedWeek</span>
+    <button class="btn-nav" @onclick="NextWeek" disabled="@(SelectedWeek >= MaxWeek || IsLoading)">NEXT →</button>
 </div>
+
+@if (SelectedWeek == ActivePicksWeek)
+{
+    <div class="control-panel">
+        <label>Factor in last</label>
+        <input type="number" min="1" max="10" @bind="Recent" />
+        <label>weeks</label>
+        <button class="btn-primary" disabled="@IsLoading" @onclick="Run">PREDICT</button>
+    </div>
+}
+else
+{
+    <p class="info-message">📅 Viewing Week @SelectedWeek (Predictions only available for Week @ActivePicksWeek)</p>
+}
 
 @if (!string.IsNullOrEmpty(Status) && Status != "Ready." && Status != "Done.")
 {
@@ -24,65 +38,123 @@
 
 @if (IsLoading)
 {
-    <p class="loading-message">Loading predictions...</p>
+    <p class="loading-message">Loading...</p>
 }
-else if (Result is not null)
+else if (CurrentWeekData?.Games != null && CurrentWeekData.Games.Any())
 {
     <div class="week-header">
-        <h2 class="week-title">WEEK @Result.Week PREDICTIONS</h2>
-        <p class="week-subtitle">
-            Factor in last <strong>@Result.RecentGames</strong> weeks | 
-            Stats through Week @Result.LastCompletedWeek | 
-            @Result.Count games
-        </p>
+        <h2 class="week-title">WEEK @SelectedWeek @(Result != null ? "PREDICTIONS" : "")</h2>
+        @if (Result != null)
+        {
+            <p class="week-subtitle">
+                Factor in last <strong>@Result.RecentGames</strong> weeks |
+                Stats through Week @Result.LastCompletedWeek |
+                @Result.Count games
+            </p>
+        }
+        else
+        {
+            <p class="week-subtitle">@CurrentWeekData.Games.Count games</p>
+        }
     </div>
 
-    @foreach (var g in Result.Games.OrderBy(g => g.Kickoff))
+    @foreach (var game in CurrentWeekData.Games.OrderBy(g => g.Kickoff))
     {
-        <div class="game-card">
+        var prediction = Result?.Games.FirstOrDefault(p =>
+            p.HomeTeam == game.HomeTeam && p.AwayTeam == game.AwayTeam);
+
+        // Determine prediction outcome for styling
+        string inlineStyle = "";
+        if (prediction != null && game.IsFinal && game.HomeScore.HasValue && game.AwayScore.HasValue)
+        {
+            var actualWinner = game.HomeScore.Value > game.AwayScore.Value ? game.HomeTeam : game.AwayTeam;
+            var isCorrect = prediction.Pick == actualWinner;
+            inlineStyle = isCorrect
+                ? "border: 3px solid #10b981; box-shadow: 0 0 16px rgba(16, 185, 129, 0.5);"
+                : "border: 3px solid #dc2626; box-shadow: 0 0 16px rgba(220, 38, 38, 0.5);";
+        }
+
+        <div class="game-card" style="@inlineStyle">
             <div class="game-header">
                 <div class="game-matchup">
-                    <span class="matchup-text">@g.AwayTeam at @g.HomeTeam</span>
+                    <span class="matchup-text">@game.AwayTeam at @game.HomeTeam</span>
                 </div>
-                <div class="game-time">@g.Kickoff.ToLocalTime().ToString("M/d/yyyy h:mm tt")</div>
+                <div class="game-time">@game.Kickoff.ToLocalTime().ToString("M/d h:mm tt")</div>
             </div>
 
-            <div class="pick-section">
-                <div class="pick-label">Pick</div>
-                <div class="pick-value">
-                    @g.Pick
-                    <span class="confidence">(@Math.Round(g.Confidence * 100)%)</span>
-                </div>
-            </div>
-
-            <div class="stats-row">
-                <div class="team-stats">
-                    <div><span class="stat-label">Home:</span> @g.HomeTeam</div>
-                    <div>W-L: <strong>@(g.Home?.Wins ?? 0)-@(g.Home?.Losses ?? 0)</strong></div>
-                    <div>PPG: <strong>@((g.Home?.PPG ?? 0).ToString("F1"))</strong></div>
-                    <div>PAPG: <strong>@((g.Home?.PAPG ?? 0).ToString("F1"))</strong></div>
-                </div>
-                <div class="team-stats">
-                    <div><span class="stat-label">Away:</span> @g.AwayTeam</div>
-                    <div>W-L: <strong>@(g.Away?.Wins ?? 0)-@(g.Away?.Losses ?? 0)</strong></div>
-                    <div>PPG: <strong>@((g.Away?.PPG ?? 0).ToString("F1"))</strong></div>
-                    <div>PAPG: <strong>@((g.Away?.PAPG ?? 0).ToString("F1"))</strong></div>
-                </div>
-            </div>
-
-            @if (!string.IsNullOrEmpty(g.Notes))
+            @if (prediction != null)
             {
-                <div class="notes">@g.Notes</div>
+                @if (game.IsFinal || game.IsInProgress)
+                {
+                    <div class="@(game.IsFinal ? "final-score" : "live-score")">
+                        <strong>@(game.IsFinal ? "FINAL:" : "LIVE:")</strong> @game.AwayTeam @game.AwayScore, @game.HomeTeam @game.HomeScore
+                    </div>
+                }
+
+                <div class="pick-section">
+                    <div class="pick-label">Pick</div>
+                    <div class="pick-value">
+                        @prediction.Pick
+                        <span class="confidence">(@Math.Round(prediction.Confidence * 100)%)</span>
+                    </div>
+                </div>
+
+                <div class="stats-row">
+                    <div class="team-stats">
+                        <div><span class="stat-label">Home:</span> @prediction.HomeTeam</div>
+                        <div>W-L: <strong>@(prediction.Home?.Wins ?? 0)-@(prediction.Home?.Losses ?? 0)</strong></div>
+                        <div>PPG: <strong>@((prediction.Home?.PPG ?? 0).ToString("F1"))</strong></div>
+                        <div>PAPG: <strong>@((prediction.Home?.PAPG ?? 0).ToString("F1"))</strong></div>
+                    </div>
+                    <div class="team-stats">
+                        <div><span class="stat-label">Away:</span> @prediction.AwayTeam</div>
+                        <div>W-L: <strong>@(prediction.Away?.Wins ?? 0)-@(prediction.Away?.Losses ?? 0)</strong></div>
+                        <div>PPG: <strong>@((prediction.Away?.PPG ?? 0).ToString("F1"))</strong></div>
+                        <div>PAPG: <strong>@((prediction.Away?.PAPG ?? 0).ToString("F1"))</strong></div>
+                    </div>
+                </div>
+
+                @if (!string.IsNullOrEmpty(prediction.Notes))
+                {
+                    <div class="notes">@prediction.Notes</div>
+                }
+            }
+            else
+            {
+                @if (game.IsFinal)
+                {
+                    <div class="final-score">
+                        <strong>FINAL:</strong> @game.AwayTeam @game.AwayScore, @game.HomeTeam @game.HomeScore
+                    </div>
+                }
+                else if (game.IsInProgress)
+                {
+                    <div class="live-score">
+                        <strong>LIVE:</strong> @game.AwayTeam @game.AwayScore, @game.HomeTeam @game.HomeScore
+                    </div>
+                }
+                else
+                {
+                    <div class="upcoming-game">Upcoming</div>
+                }
             }
         </div>
     }
 }
 
 @code {
+    // Existing prediction state
     int Recent = 3;
     bool IsLoading;
     string Status = "Ready.";
     PredictResponse? Result;
+
+    // New week navigation state
+    int SelectedWeek = 1;
+    int ActivePicksWeek = 1;
+    int MaxWeek = 18;
+    ScoreboardWeekResponse? CurrentWeekData;
+    SeasonContextResponse? SeasonContext;
 
     protected override async Task OnInitializedAsync()
     {
@@ -92,7 +164,72 @@ else if (Result is not null)
             Navigation.NavigateTo("/login");
             return;
         }
+
+        // Load season context and current week
+        await LoadSeasonContextAsync();
+        await LoadCurrentWeekAsync();
     }
+
+    async Task LoadSeasonContextAsync()
+    {
+        try
+        {
+            SeasonContext = await ScoreboardService.GetSeasonContextAsync();
+            if (SeasonContext != null)
+            {
+                ActivePicksWeek = SeasonContext.ActivePicksWeek;
+                SelectedWeek = ActivePicksWeek;
+                MaxWeek = SeasonContext.MaxWeek;
+            }
+        }
+        catch (Exception ex)
+        {
+            Status = $"Error loading context: {ex.Message}";
+        }
+    }
+
+    async Task LoadCurrentWeekAsync()
+    {
+        IsLoading = true;
+        try
+        {
+            CurrentWeekData = await ScoreboardService.GetCurrentWeekAsync();
+            Status = "Ready.";
+        }
+        catch (Exception ex)
+        {
+            Status = $"Error: {ex.Message}";
+        }
+        finally
+        {
+            IsLoading = false;
+        }
+    }
+
+    async Task NavigateToWeek(int week)
+    {
+        SelectedWeek = Math.Clamp(week, 1, MaxWeek);
+        IsLoading = true;
+        Result = null;  // Clear predictions when changing weeks
+        
+        try
+        {
+            CurrentWeekData = await ScoreboardService.GetWeekAsync(SelectedWeek);
+            Status = "Ready.";
+        }
+        catch (Exception ex)
+        {
+            Status = $"Error: {ex.Message}";
+        }
+        finally
+        {
+            IsLoading = false;
+        }
+    }
+
+    async Task PreviousWeek() => await NavigateToWeek(SelectedWeek - 1);
+    
+    async Task NextWeek() => await NavigateToWeek(SelectedWeek + 1);
 
     async Task HandleLogout()
     {
@@ -102,15 +239,24 @@ else if (Result is not null)
 
     async Task Run()
     {
-        IsLoading = true; Result = null; Status = "Contacting API…";
+        IsLoading = true;
+        Result = null;
+        Status = "Contacting API…";
         StateHasChanged();
 
         try
         {
             var url = $"/predict?recent={Math.Clamp(Recent, 1, 10)}";
             var data = await Http.GetFromJsonAsync<PredictResponse>(url);
-            if (data is null) { Status = "API returned no data."; }
-            else { Result = data; Status = "Done."; }
+            if (data is null)
+            {
+                Status = "API returned no data.";
+            }
+            else
+            {
+                Result = data;
+                Status = "Done.";
+            }
         }
         catch (Exception ex)
         {

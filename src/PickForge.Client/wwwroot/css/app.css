@@ -424,3 +424,25 @@ code {
         font-size: 1.25rem;
     }
 }
+
+
+/* Prediction Outcome Styles */
+.game-card.prediction-correct {
+    border: 3px solid var(--success-green) !important;
+    box-shadow: 0 0 16px rgba(16, 185, 129, 0.5) !important;
+}
+
+.game-card.prediction-correct:hover {
+    border-color: var(--success-green) !important;
+    box-shadow: 0 4px 20px rgba(16, 185, 129, 0.6) !important;
+}
+
+.game-card.prediction-incorrect {
+    border: 3px solid var(--accent-red) !important;
+    box-shadow: 0 0 16px rgba(220, 38, 38, 0.5) !important;
+}
+
+.game-card.prediction-incorrect:hover {
+    border-color: var(--accent-red) !important;
+    box-shadow: 0 4px 20px rgba(220, 38, 38, 0.6) !important;
+}
