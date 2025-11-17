@@ -17,18 +17,9 @@
     <button class="btn-nav" @onclick="NextWeek" disabled="@(SelectedWeek >= MaxWeek || IsLoading)">NEXT →</button>
 </div>
 
-@if (SelectedWeek == ActivePicksWeek)
+@if (SelectedWeek != ActivePicksWeek)
 {
-    <div class="control-panel">
-        <label>Factor in last</label>
-        <input type="number" min="1" max="10" @bind="Recent" />
-        <label>weeks</label>
-        <button class="btn-primary" disabled="@IsLoading" @onclick="Run">PREDICT</button>
-    </div>
-}
-else
-{
-    <p class="info-message">📅 Viewing Week @SelectedWeek (Predictions only available for Week @ActivePicksWeek)</p>
+    <p class="info-message">📅 Viewing Week @SelectedWeek (Predictions available on Week @ActivePicksWeek)</p>
 }
 
 @if (!string.IsNullOrEmpty(Status) && Status != "Ready." && Status != "Done.")
@@ -143,13 +134,12 @@ else if (CurrentWeekData?.Games != null && CurrentWeekData.Games.Any())
 }
 
 @code {
-    // Existing prediction state
-    int Recent = 3;
+    // State
     bool IsLoading;
     string Status = "Ready.";
     PredictResponse? Result;
 
-    // New week navigation state
+    // Week navigation state
     int SelectedWeek = 1;
     int ActivePicksWeek = 1;
     int MaxWeek = 18;
@@ -168,6 +158,12 @@ else if (CurrentWeekData?.Games != null && CurrentWeekData.Games.Any())
         // Load season context and current week
         await LoadSeasonContextAsync();
         await LoadCurrentWeekAsync();
+        
+        // Auto-predict if on active week
+        if (SelectedWeek == ActivePicksWeek)
+        {
+            await RunPrediction();
+        }
     }
 
     async Task LoadSeasonContextAsync()
@@ -216,6 +212,12 @@ else if (CurrentWeekData?.Games != null && CurrentWeekData.Games.Any())
         {
             CurrentWeekData = await ScoreboardService.GetWeekAsync(SelectedWeek);
             Status = "Ready.";
+            
+            // Auto-predict if navigating to active week
+            if (SelectedWeek == ActivePicksWeek)
+            {
+                await RunPrediction();
+            }
         }
         catch (Exception ex)
         {
@@ -237,16 +239,27 @@ else if (CurrentWeekData?.Games != null && CurrentWeekData.Games.Any())
         Navigation.NavigateTo("/login");
     }
 
-    async Task Run()
+    async Task RunPrediction()
     {
         IsLoading = true;
         Result = null;
-        Status = "Contacting API…";
+        Status = "Generating predictions…";
         StateHasChanged();
 
         try
         {
-            var url = $"/predict?recent={Math.Clamp(Recent, 1, 10)}";
+            // Use a smart default for recent weeks based on current week
+            // Early season (weeks 1-4): use 3 weeks
+            // Mid season (weeks 5-12): use 4 weeks
+            // Late season (weeks 13+): use 5 weeks
+            int recentWeeks = ActivePicksWeek switch
+            {
+                <= 4 => 3,
+                <= 12 => 4,
+                _ => 5
+            };
+            
+            var url = $"/predict?recent={recentWeeks}";
             var data = await Http.GetFromJsonAsync<PredictResponse>(url);
             if (data is null)
             {
