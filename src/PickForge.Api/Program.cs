@@ -1,5 +1,8 @@
 using System.Net.Http.Headers;
 using Microsoft.AspNetCore.RateLimiting;
+using Microsoft.EntityFrameworkCore;
+using PickForge.Api.Data;
+using PickForge.Api.Models;
 using PickForge.Api.Services;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -24,6 +27,13 @@ builder.Services.AddCors(options =>
     });
 });
 
+// Add DbContext
+builder.Services.AddDbContext<PickForgeDbContext>(options =>
+    options.UseNpgsql(builder.Configuration.GetConnectionString("PickForgeDb")));
+
+// Add MemoryCache
+builder.Services.AddMemoryCache();
+
 // Minimal dependencies
 builder.Services.AddRateLimiter(o =>
 {
@@ -45,6 +55,37 @@ builder.Services.AddSingleton<StatsService>();
 builder.Services.AddSingleton<PredictionService>();
 
 var app = builder.Build();
+
+// Apply pending migrations automatically on startup
+using (var scope = app.Services.CreateScope())
+{
+    try
+    {
+        var logger = scope.ServiceProvider.GetRequiredService<ILogger<Program>>();
+        var db = scope.ServiceProvider.GetRequiredService<PickForgeDbContext>();
+        
+        logger.LogInformation("🔄 Checking for pending database migrations...");
+        var pendingMigrations = db.Database.GetPendingMigrations().ToList();
+        
+        if (pendingMigrations.Any())
+        {
+            logger.LogInformation($"📊 Found {pendingMigrations.Count} pending migration(s): {string.Join(", ", pendingMigrations)}");
+            logger.LogInformation("⚙️  Applying migrations...");
+            db.Database.Migrate();
+            logger.LogInformation("✅ Database migrations applied successfully");
+        }
+        else
+        {
+            logger.LogInformation("✅ Database is up to date - no pending migrations");
+        }
+    }
+    catch (Exception ex)
+    {
+        var logger = scope.ServiceProvider.GetRequiredService<ILogger<Program>>();
+        logger.LogError(ex, "❌ Failed to apply database migrations");
+        throw; // Re-throw to prevent app from starting with broken DB
+    }
+}
 
 // --- Middleware order matters ---
 app.UseHttpsRedirection();
@@ -156,6 +197,50 @@ app.MapGet("/predict", async (
         Count = games.Count,
         Games = games
     });
+}).RequireRateLimiting("fixed");
+
+// POST /api/picks - Save predictions
+app.MapPost("/api/picks", async (
+    PickForgeDbContext db,
+    List<PredictionDto> predictions) =>
+{
+    var entities = predictions.Select(p => new Prediction
+    {
+        Week = p.Week,
+        SeasonYear = p.SeasonYear,
+        GameId = p.GameId,
+        HomeTeam = p.HomeTeam,
+        AwayTeam = p.AwayTeam,
+        PredictedWinner = p.PredictedWinner,
+        Confidence = p.Confidence,
+        CreatedUtc = DateTime.UtcNow,
+        Notes = p.Notes
+    }).ToList();
+    
+    db.Predictions.AddRange(entities);
+    await db.SaveChangesAsync();
+    
+    return Results.Ok(new { saved = entities.Count });
+}).RequireRateLimiting("fixed");
+
+// GET /api/picks/history - Get all predictions
+app.MapGet("/api/picks/history", async (
+    PickForgeDbContext db,
+    int? week,
+    int? year) =>
+{
+    var query = db.Predictions.AsQueryable();
+    
+    if (week.HasValue)
+        query = query.Where(p => p.Week == week.Value);
+    if (year.HasValue)
+        query = query.Where(p => p.SeasonYear == year.Value);
+    
+    var predictions = await query
+        .OrderByDescending(p => p.CreatedUtc)
+        .ToListAsync();
+    
+    return Results.Ok(predictions);
 }).RequireRateLimiting("fixed");
 
 app.Run();
