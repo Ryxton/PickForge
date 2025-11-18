@@ -125,26 +125,34 @@ jobs:
           echo "image=$ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG" >> $GITHUB_OUTPUT
       
       - name: Deploy to App Runner with RDS Configuration
+        env:
+          ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+          ECR_REPOSITORY: pickforge-api
+          IMAGE_TAG: ${{ github.sha }}
         run: |
           if [ -n "${{ secrets.APP_RUNNER_SERVICE_ARN }}" ]; then
-            # Update App Runner service with RDS connection string as environment variable
-            # This configures the production PostgreSQL database connection
+            # Update App Runner service with new image and RDS connection string
+            # This configures both the Docker image and production PostgreSQL database connection
             aws apprunner update-service \
               --service-arn ${{ secrets.APP_RUNNER_SERVICE_ARN }} \
               --region ${{ env.AWS_REGION }} \
-              --source-configuration '{
-                "ImageRepository": {
-                  "ImageConfiguration": {
-                    "RuntimeEnvironmentVariables": {
-                      "ConnectionStrings__PickForgeDb": "${{ secrets.PICKFORGE_DB_CONNECTIONSTRING_PROD }}"
+              --source-configuration "{
+                \"ImageRepository\": {
+                  \"ImageIdentifier\": \"$ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG\",
+                  \"ImageRepositoryType\": \"ECR\",
+                  \"ImageConfiguration\": {
+                    \"Port\": \"8080\",
+                    \"RuntimeEnvironmentVariables\": {
+                      \"ConnectionStrings__PickForgeDb\": \"${{ secrets.PICKFORGE_DB_CONNECTIONSTRING_PROD }}\"
                     }
                   }
                 }
-              }' \
+              }" \
               --no-cli-pager
             
-            echo "✅ App Runner service updated with RDS connection string"
-            echo "📊 Database: AWS RDS PostgreSQL (ryxton-postgres/pickforge)"
+            echo "✅ App Runner service updated with new image and RDS connection string"
+            echo "📦 Image: $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG"
+            echo " Database: AWS RDS PostgreSQL (ryxton-postgres/pickforge)"
           else
             echo "⚠️  APP_RUNNER_SERVICE_ARN not set, skipping deployment"
           fi
