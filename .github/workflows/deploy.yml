@@ -124,13 +124,27 @@ jobs:
           
           echo "image=$ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG" >> $GITHUB_OUTPUT
       
-      - name: Deploy to App Runner
+      - name: Deploy to App Runner with RDS Configuration
         run: |
           if [ -n "${{ secrets.APP_RUNNER_SERVICE_ARN }}" ]; then
-            aws apprunner start-deployment \
+            # Update App Runner service with RDS connection string as environment variable
+            # This configures the production PostgreSQL database connection
+            aws apprunner update-service \
               --service-arn ${{ secrets.APP_RUNNER_SERVICE_ARN }} \
-              --region ${{ env.AWS_REGION }}
-            echo "✅ App Runner deployment triggered"
+              --region ${{ env.AWS_REGION }} \
+              --source-configuration '{
+                "ImageRepository": {
+                  "ImageConfiguration": {
+                    "RuntimeEnvironmentVariables": {
+                      "ConnectionStrings__PickForgeDb": "${{ secrets.PICKFORGE_DB_CONNECTIONSTRING_PROD }}"
+                    }
+                  }
+                }
+              }' \
+              --no-cli-pager
+            
+            echo "✅ App Runner service updated with RDS connection string"
+            echo "📊 Database: AWS RDS PostgreSQL (ryxton-postgres/pickforge)"
           else
             echo "⚠️  APP_RUNNER_SERVICE_ARN not set, skipping deployment"
           fi
