@@ -1,0 +1,102 @@
+@page "/history"
+@using PickForge.Client.Models
+@inject HttpClient Http
+@inject NavigationManager Navigation
+
+<div class="app-header">
+    <h1 class="app-title">PREDICTION HISTORY</h1>
+    <button class="btn-logout" @onclick="GoBack">← BACK</button>
+</div>
+
+@if (IsLoading)
+{
+    <p class="loading-message">Loading history...</p>
+}
+else if (!string.IsNullOrEmpty(ErrorMessage))
+{
+    <p class="error-message">@ErrorMessage</p>
+}
+else if (predictions == null || !predictions.Any())
+{
+    <p class="info-message">No predictions found. Generate some predictions first!</p>
+}
+else
+{
+    <div class="history-container">
+        @foreach (var weekGroup in predictions.GroupBy(p => p.Week).OrderByDescending(g => g.Key))
+        {
+            <div class="week-section">
+                <h2 class="week-title">WEEK @weekGroup.Key (@weekGroup.First().SeasonYear)</h2>
+                <p class="week-subtitle">@weekGroup.Count() predictions</p>
+                
+                @foreach (var pred in weekGroup.OrderBy(p => p.CreatedUtc))
+                {
+                    <div class="prediction-card @GetPredictionClass(pred)">
+                        <div class="game-header">
+                            <div class="game-matchup">
+                                <span class="matchup-text">@pred.AwayTeam at @pred.HomeTeam</span>
+                            </div>
+                            <div class="game-time">@pred.CreatedUtc.ToLocalTime().ToString("M/d h:mm tt")</div>
+                        </div>
+                        
+                        <div class="pick-section">
+                            <div class="pick-label">Pick</div>
+                            <div class="pick-value">
+                                @pred.PredictedWinner
+                                <span class="confidence">(@Math.Round(pred.Confidence * 100)%)</span>
+                            </div>
+                        </div>
+                        
+                        @if (pred.WasCorrect.HasValue)
+                        {
+                            <div class="result-badge @(pred.WasCorrect.Value ? "correct" : "incorrect")">
+                                @(pred.WasCorrect.Value ? "✓ CORRECT" : "✗ INCORRECT")
+                            </div>
+                        }
+                        
+                        @if (!string.IsNullOrEmpty(pred.Notes))
+                        {
+                            <div class="notes">@pred.Notes</div>
+                        }
+                    </div>
+                }
+            </div>
+        }
+    </div>
+}
+
+@code {
+    List<PredictionHistoryItem>? predictions;
+    bool IsLoading = true;
+    string ErrorMessage = "";
+    
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            predictions = await Http.GetFromJsonAsync<List<PredictionHistoryItem>>("/api/picks/history");
+        }
+        catch (Exception ex)
+        {
+            ErrorMessage = $"Error loading history: {ex.Message}";
+        }
+        finally
+        {
+            IsLoading = false;
+        }
+    }
+    
+    void GoBack()
+    {
+        Navigation.NavigateTo("/");
+    }
+    
+    string GetPredictionClass(PredictionHistoryItem pred)
+    {
+        if (pred.WasCorrect.HasValue)
+        {
+            return pred.WasCorrect.Value ? "prediction-correct" : "prediction-incorrect";
+        }
+        return "";
+    }
+}

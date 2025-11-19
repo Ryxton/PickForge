@@ -445,4 +445,117 @@ code {
 .game-card.prediction-incorrect:hover {
     border-color: var(--accent-red) !important;
     box-shadow: 0 4px 20px rgba(220, 38, 38, 0.6) !important;
+
+/* History Page Styles */
+.history-container {
+    max-width: 1200px;
+    margin: 0 auto;
+    padding: 1.5rem;
+}
+
+.week-section {
+    margin-bottom: 2rem;
+}
+
+.prediction-card {
+    background-color: var(--card-bg);
+    border: 1px solid var(--border-color);
+    border-radius: 12px;
+    padding: 1rem;
+    margin-bottom: 1rem;
+    transition: all 0.2s ease;
+}
+
+.result-badge {
+    display: inline-block;
+    padding: 0.5rem 1rem;
+    border-radius: 6px;
+    font-weight: 700;
+    font-size: 0.875rem;
+    margin-top: 0.75rem;
+}
+
+.result-badge.correct {
+    background-color: rgba(16, 185, 129, 0.2);
+    color: var(--success-green);
+    border: 1px solid var(--success-green);
+}
+
+.result-badge.incorrect {
+    background-color: rgba(220, 38, 38, 0.2);
+    color: var(--accent-red);
+    border: 1px solid var(--accent-red);
+}
+
+/* Week Navigation */
+.week-navigation {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    gap: 1rem;
+    padding: 1rem;
+    background-color: var(--secondary-bg);
+    border-bottom: 1px solid var(--border-color);
+}
+
+.week-display {
+    font-size: 1.25rem;
+    font-weight: 700;
+    min-width: 120px;
+    text-align: center;
+}
+
+.btn-nav {
+    background-color: var(--card-bg);
+    color: var(--text-primary);
+    border: 1px solid var(--border-color);
+    padding: 0.5rem 1rem;
+    border-radius: 6px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.btn-nav:hover:not(:disabled) {
+    background-color: var(--secondary-bg);
+    border-color: var(--accent-blue);
+}
+
+.btn-nav:disabled {
+    opacity: 0.3;
+    cursor: not-allowed;
+}
+
+/* Info Message */
+.info-message {
+    background-color: rgba(59, 130, 246, 0.1);
+    color: var(--accent-blue);
+    padding: 1rem;
+    border-radius: 8px;
+    border-left: 3px solid var(--accent-blue);
+    margin: 1rem 0;
+}
+
+/* Final and Live Score Badges */
+.final-score, .live-score, .upcoming-game {
+    padding: 0.5rem;
+    border-radius: 6px;
+    font-weight: 600;
+    font-size: 0.875rem;
+    margin-bottom: 0.75rem;
+}
+
+.final-score {
+    background-color: rgba(16, 185, 129, 0.1);
+    color: var(--success-green);
+}
+
+.live-score {
+    background-color: rgba(245, 158, 11, 0.1);
+    color: var(--warning-orange);
+}
+
+.upcoming-game {
+    background-color: rgba(100, 116, 139, 0.1);
+    color: var(--text-muted);
+}
 }

@@ -60,3 +60,30 @@ public class TeamStats
     public double PPG { get; set; }
     public double PAPG { get; set; }
 }
+
+public class SavePredictionRequest
+{
+    public int Week { get; set; }
+    public int SeasonYear { get; set; }
+    public string GameId { get; set; } = "";
+    public string HomeTeam { get; set; } = "";
+    public string AwayTeam { get; set; } = "";
+    public string PredictedWinner { get; set; } = "";
+    public double Confidence { get; set; }
+    public string Notes { get; set; } = "";
+}
+
+public class PredictionHistoryItem
+{
+    public int Id { get; set; }
+    public int Week { get; set; }
+    public int SeasonYear { get; set; }
+    public string GameId { get; set; } = "";
+    public string HomeTeam { get; set; } = "";
+    public string AwayTeam { get; set; } = "";
+    public string PredictedWinner { get; set; } = "";
+    public double Confidence { get; set; }
+    public bool? WasCorrect { get; set; }
+    public DateTime CreatedUtc { get; set; }
+    public string Notes { get; set; } = "";
+}

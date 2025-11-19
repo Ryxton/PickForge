@@ -268,7 +268,30 @@ else if (CurrentWeekData?.Games != null && CurrentWeekData.Games.Any())
             else
             {
                 Result = data;
-                Status = "Done.";
+                
+                // Save predictions to database
+                try
+                {
+                    var predictions = data.Games.Select(g => new SavePredictionRequest
+                    {
+                        Week = data.Week,
+                        SeasonYear = CurrentWeekData?.SeasonYear ?? DateTime.Now.Year,
+                        GameId = g.GameId,
+                        HomeTeam = g.HomeTeam,
+                        AwayTeam = g.AwayTeam,
+                        PredictedWinner = g.Pick,
+                        Confidence = g.Confidence,
+                        Notes = g.Notes
+                    }).ToList();
+                    
+                    await Http.PostAsJsonAsync("/api/picks", predictions);
+                    Status = "Done.";
+                }
+                catch (Exception saveEx)
+                {
+                    // Don't fail the whole operation if save fails
+                    Status = $"Predictions generated but save failed: {saveEx.Message}";
+                }
             }
         }
         catch (Exception ex)

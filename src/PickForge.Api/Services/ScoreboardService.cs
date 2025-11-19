@@ -1,4 +1,5 @@
 ﻿using System.Text.Json;
+using Microsoft.Extensions.Caching.Memory;
 using PickForge.Api.Models;
 
 namespace PickForge.Api.Services;
@@ -6,18 +7,35 @@ namespace PickForge.Api.Services;
 public class ScoreboardService
 {
     private readonly HttpClient _http;
+    private readonly IMemoryCache _cache;
     private const string BaseUrl = "https://site.api.espn.com/apis/site/v2/sports/football/nfl/scoreboard";
     private static readonly JsonSerializerOptions JsonOptions = new() { PropertyNameCaseInsensitive = true };
+    private static readonly TimeSpan CacheDuration = TimeSpan.FromMinutes(5);
 
-    public ScoreboardService(HttpClient http) => _http = http;
+    public ScoreboardService(HttpClient http, IMemoryCache cache)
+    {
+        _http = http;
+        _cache = cache;
+    }
 
     public async Task<(string RawJson, ScoreboardResponse Scoreboard)> GetScoreboardAsync(int? week = null)
     {
+        var cacheKey = week.HasValue ? $"scoreboard:week:{week.Value}" : "scoreboard:current";
+        
+        if (_cache.TryGetValue(cacheKey, out (string Json, ScoreboardResponse Scoreboard)? cached) && cached.HasValue)
+        {
+            return cached.Value;
+        }
+        
         var url = week is null ? BaseUrl : $"{BaseUrl}?week={week.Value}&seasontype=2";
         var json = await _http.GetStringAsync(url);
         var sb = JsonSerializer.Deserialize<ScoreboardResponse>(json, JsonOptions)
                  ?? throw new InvalidOperationException("Failed to parse scoreboard JSON.");
-        return (json, sb);
+        
+        var result = (json, sb);
+        _cache.Set(cacheKey, result, CacheDuration);
+        
+        return result;
     }
 
     public async Task<SeasonContext> GetSeasonContextAsync()
