@@ -131,11 +131,12 @@ jobs:
           IMAGE_TAG: ${{ github.sha }}
         run: |
           if [ -n "${{ secrets.APP_RUNNER_SERVICE_ARN }}" ]; then
-            # Build the update command with VPC connector if provided
-            UPDATE_CMD="aws apprunner update-service \
+            # Update App Runner service with new image and RDS connection string
+            # RDS is publicly accessible, no VPC connector needed
+            aws apprunner update-service \
               --service-arn ${{ secrets.APP_RUNNER_SERVICE_ARN }} \
               --region ${{ env.AWS_REGION }} \
-              --source-configuration '{
+              --source-configuration "{
                 \"ImageRepository\": {
                   \"ImageIdentifier\": \"$ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG\",
                   \"ImageRepositoryType\": \"ECR\",
@@ -146,29 +147,12 @@ jobs:
                     }
                   }
                 }
-              }'"
-            
-            # Add VPC connector configuration if ARN is provided
-            if [ -n "${{ secrets.VPC_CONNECTOR_ARN }}" ]; then
-              UPDATE_CMD="$UPDATE_CMD --network-configuration '{
-                \"EgressConfiguration\": {
-                  \"EgressType\": \"VPC\",
-                  \"VpcConnectorArn\": \"${{ secrets.VPC_CONNECTOR_ARN }}\"
-                }
-              }'"
-              echo "🔒 Configuring VPC connector for private RDS access"
-            fi
-            
-            # Execute the update command
-            UPDATE_CMD="$UPDATE_CMD --no-cli-pager"
-            eval $UPDATE_CMD
+              }" \
+              --no-cli-pager
             
             echo "✅ App Runner service updated with new image and RDS connection string"
             echo "📦 Image: $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG"
-            echo "🗄️ Database: AWS RDS PostgreSQL (ryxton-postgres/pickforge)"
-            if [ -n "${{ secrets.VPC_CONNECTOR_ARN }}" ]; then
-              echo "🔒 VPC Connector: ${{ secrets.VPC_CONNECTOR_ARN }}"
-            fi
+            echo "🗄️ Database: AWS RDS PostgreSQL (public access)"
           else
             echo "⚠️  APP_RUNNER_SERVICE_ARN not set, skipping deployment"
           fi
