@@ -64,25 +64,19 @@ using (var scope = app.Services.CreateScope())
         var logger = scope.ServiceProvider.GetRequiredService<ILogger<Program>>();
         var db = scope.ServiceProvider.GetRequiredService<PickForgeDbContext>();
         
-        logger.LogInformation(">>> Checking for pending database migrations...");
         var pendingMigrations = db.Database.GetPendingMigrations().ToList();
         
         if (pendingMigrations.Any())
         {
-            logger.LogInformation($">>> Found {pendingMigrations.Count} pending migration(s): {string.Join(", ", pendingMigrations)}");
-            logger.LogInformation(">>> Applying migrations...");
+            logger.LogInformation("Applying {Count} pending database migration(s)", pendingMigrations.Count);
             db.Database.Migrate();
-            logger.LogInformation(">>> Database migrations applied successfully!");
-        }
-        else
-        {
-            logger.LogInformation(">>> Database is up to date - no pending migrations");
+            logger.LogInformation("Database migrations applied successfully");
         }
     }
     catch (Exception ex)
     {
         var logger = scope.ServiceProvider.GetRequiredService<ILogger<Program>>();
-        logger.LogError(ex, ">>> FAILED to apply database migrations");
+        logger.LogError(ex, "Failed to apply database migrations");
         throw; // Re-throw to prevent app from starting with broken DB
     }
 }
