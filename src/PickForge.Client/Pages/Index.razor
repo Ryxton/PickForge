@@ -34,13 +34,23 @@
 else if (CurrentWeekData?.Games != null && CurrentWeekData.Games.Any())
 {
     <div class="week-header">
-        <h2 class="week-title">WEEK @SelectedWeek @(Result != null ? "PREDICTIONS" : "")</h2>
+        <h2 class="week-title">WEEK @SelectedWeek @(Result != null || StoredPredictions != null ? "PREDICTIONS" : "")</h2>
         @if (Result != null)
         {
             <p class="week-subtitle">
                 Factor in last <strong>@Result.RecentGames</strong> weeks |
                 Stats through Week @Result.LastCompletedWeek |
-                @Result.Count games
+                @Result.Count games@(TotalFinished > 0 ? $" ({CorrectCount} correct)" : "")
+            </p>
+        }
+        else if (StoredPredictions != null && StoredPredictions.Predictions.Any())
+        {
+            <p class="week-subtitle">
+                @CurrentWeekData.Games.Count games
+                @if (StoredPredictions.TotalFinished > 0)
+                {
+                    <text> (@StoredPredictions.CorrectCount correct)</text>
+                }
             </p>
         }
         else
@@ -51,16 +61,30 @@ else if (CurrentWeekData?.Games != null && CurrentWeekData.Games.Any())
 
     @foreach (var game in CurrentWeekData.Games.OrderBy(g => g.Kickoff))
     {
+        // Check for fresh predictions first, then stored predictions
         var prediction = Result?.Games.FirstOrDefault(p =>
+            p.HomeTeam == game.HomeTeam && p.AwayTeam == game.AwayTeam);
+        
+        var storedPrediction = StoredPredictions?.Predictions.FirstOrDefault(p =>
             p.HomeTeam == game.HomeTeam && p.AwayTeam == game.AwayTeam);
 
         // Determine prediction outcome for styling
         string inlineStyle = "";
+        bool? wasCorrect = null;
+        
         if (prediction != null && game.IsFinal && game.HomeScore.HasValue && game.AwayScore.HasValue)
         {
             var actualWinner = game.HomeScore.Value > game.AwayScore.Value ? game.HomeTeam : game.AwayTeam;
             var isCorrect = prediction.Pick == actualWinner;
+            wasCorrect = isCorrect;
             inlineStyle = isCorrect
+                ? "border: 3px solid #10b981; box-shadow: 0 0 16px rgba(16, 185, 129, 0.5);"
+                : "border: 3px solid #dc2626; box-shadow: 0 0 16px rgba(220, 38, 38, 0.5);";
+        }
+        else if (storedPrediction?.WasCorrect.HasValue == true)
+        {
+            wasCorrect = storedPrediction.WasCorrect.Value;
+            inlineStyle = wasCorrect.Value
                 ? "border: 3px solid #10b981; box-shadow: 0 0 16px rgba(16, 185, 129, 0.5);"
                 : "border: 3px solid #dc2626; box-shadow: 0 0 16px rgba(220, 38, 38, 0.5);";
         }
@@ -110,6 +134,28 @@ else if (CurrentWeekData?.Games != null && CurrentWeekData.Games.Any())
                     <div class="notes">@prediction.Notes</div>
                 }
             }
+            else if (storedPrediction != null)
+            {
+                @if (game.IsFinal || game.IsInProgress)
+                {
+                    <div class="@(game.IsFinal ? "final-score" : "live-score")">
+                        <strong>@(game.IsFinal ? "FINAL:" : "LIVE:")</strong> @game.AwayTeam @game.AwayScore, @game.HomeTeam @game.HomeScore
+                    </div>
+                }
+
+                <div class="pick-section">
+                    <div class="pick-label">Pick</div>
+                    <div class="pick-value">
+                        @storedPrediction.PredictedWinner
+                        <span class="confidence">(@Math.Round(storedPrediction.Confidence * 100)%)</span>
+                    </div>
+                </div>
+
+                @if (!string.IsNullOrEmpty(storedPrediction.Notes))
+                {
+                    <div class="notes">@storedPrediction.Notes</div>
+                }
+            }
             else
             {
                 @if (game.IsFinal)
@@ -138,6 +184,9 @@ else if (CurrentWeekData?.Games != null && CurrentWeekData.Games.Any())
     bool IsLoading;
     string Status = "Ready.";
     PredictResponse? Result;
+    WeekPredictionsResponse? StoredPredictions;
+    int CorrectCount = 0;
+    int TotalFinished = 0;
 
     // Week navigation state
     int SelectedWeek = 1;
@@ -206,7 +255,10 @@ else if (CurrentWeekData?.Games != null && CurrentWeekData.Games.Any())
     {
         SelectedWeek = Math.Clamp(week, 1, MaxWeek);
         IsLoading = true;
-        Result = null;  // Clear predictions when changing weeks
+        Result = null;  // Clear fresh predictions when changing weeks
+        StoredPredictions = null;  // Clear stored predictions
+        CorrectCount = 0;  // Reset accuracy counters
+        TotalFinished = 0;
         
         try
         {
@@ -218,6 +270,11 @@ else if (CurrentWeekData?.Games != null && CurrentWeekData.Games.Any())
             {
                 await RunPrediction();
             }
+            else
+            {
+                // Try to load stored predictions for past weeks
+                await LoadStoredPredictions();
+            }
         }
         catch (Exception ex)
         {
@@ -226,6 +283,26 @@ else if (CurrentWeekData?.Games != null && CurrentWeekData.Games.Any())
         finally
         {
             IsLoading = false;
+        }
+    }
+
+    async Task LoadStoredPredictions()
+    {
+        try
+        {
+            var year = CurrentWeekData?.SeasonYear ?? DateTime.Now.Year;
+            var response = await Http.GetFromJsonAsync<WeekPredictionsResponse>(
+                $"/api/picks/week/{SelectedWeek}?year={year}");
+            
+            if (response != null && response.Predictions.Any())
+            {
+                StoredPredictions = response;
+            }
+        }
+        catch (Exception ex)
+        {
+            // Silently fail - it's okay if there are no stored predictions
+            Console.WriteLine($"No stored predictions found: {ex.Message}");
         }
     }
 
@@ -269,6 +346,9 @@ else if (CurrentWeekData?.Games != null && CurrentWeekData.Games.Any())
             {
                 Result = data;
                 
+                // Calculate accuracy for display
+                (CorrectCount, TotalFinished) = CalculateAccuracy(Result, CurrentWeekData.Games);
+                
                 // Save predictions to database
                 try
                 {
@@ -302,5 +382,35 @@ else if (CurrentWeekData?.Games != null && CurrentWeekData.Games.Any())
         {
             IsLoading = false;
         }
+    }
+
+    (int correctCount, int totalFinished) CalculateAccuracy(PredictResponse predictions, List<GameViewModel> games)
+    {
+        int correct = 0;
+        int finished = 0;
+        
+        Console.WriteLine($"CalculateAccuracy called - games count: {games.Count}");
+        
+        foreach (var game in games)
+        {
+            if (game.IsFinal && game.HomeScore.HasValue && game.AwayScore.HasValue)
+            {
+                finished++;
+                var prediction = predictions.Games.FirstOrDefault(p =>
+                    p.HomeTeam == game.HomeTeam && p.AwayTeam == game.AwayTeam);
+                if (prediction != null)
+                {
+                    var actualWinner = game.HomeScore.Value > game.AwayScore.Value ? game.HomeTeam : game.AwayTeam;
+                    if (prediction.Pick == actualWinner)
+                    {
+                        correct++;
+                        Console.WriteLine($"Correct: {game.HomeTeam} vs {game.AwayTeam}");
+                    }
+                }
+            }
+        }
+        
+        Console.WriteLine($"CalculateAccuracy result - correct: {correct}, finished: {finished}");
+        return (correct, finished);
     }
 }

@@ -87,3 +87,35 @@ public class PredictionHistoryItem
     public DateTime CreatedUtc { get; set; }
     public string Notes { get; set; } = "";
 }
+
+public class WeekPredictionsResponse
+{
+    public int Week { get; set; }
+    public int SeasonYear { get; set; }
+    public List<StoredPrediction> Predictions { get; set; } = new();
+    public int CorrectCount { get; set; }
+    public int TotalFinished { get; set; }
+}
+
+public class StoredPrediction
+{
+    public string GameId { get; set; } = "";
+    public string HomeTeam { get; set; } = "";
+    public string AwayTeam { get; set; } = "";
+    public string PredictedWinner { get; set; } = "";
+    public double Confidence { get; set; }
+    public bool? WasCorrect { get; set; }
+    public string Notes { get; set; } = "";
+    public DateTime CreatedUtc { get; set; }
+    public GameInfo? Game { get; set; }
+}
+
+public class GameInfo
+{
+    public DateTime Kickoff { get; set; }
+    public int? HomeScore { get; set; }
+    public int? AwayScore { get; set; }
+    public bool IsFinal { get; set; }
+    public bool IsInProgress { get; set; }
+    public string Status { get; set; } = "";
+}
