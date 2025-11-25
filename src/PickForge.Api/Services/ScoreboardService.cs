@@ -43,9 +43,14 @@ public class ScoreboardService
         var (_, sb) = await GetScoreboardAsync(null);
         var currentWeek = Math.Clamp(sb.Week?.Number ?? 1, 1, 18);
         var nowUtc = DateTime.UtcNow;
-        bool hasFuture = sb.Events?.Any(e => e.Date.ToUniversalTime() > nowUtc) ?? false;
         
-        int activePicksWeek = hasFuture ? currentWeek : Math.Clamp(currentWeek + 1, 1, 18);
+        // Check if there are any games that haven't finished yet (future kickoff OR in progress)
+        bool hasActiveGames = sb.Events?.Any(e =>
+            e.Date.ToUniversalTime() > nowUtc ||
+            !(e.Competitions?.FirstOrDefault()?.Status?.Type?.Completed ?? true)
+        ) ?? false;
+        
+        int activePicksWeek = hasActiveGames ? currentWeek : Math.Clamp(currentWeek + 1, 1, 18);
         
         return new SeasonContext(
             CurrentYear: DateTime.Now.Year,
